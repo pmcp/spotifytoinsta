@@ -88,7 +88,7 @@
 
     <script>
         // Spotify API credentials
-        const clientId = '1ac85e0c0e964dc19b13b30c90039338'; // You need to replace this with your Spotify API client ID
+        const clientId = 'YOUR_SPOTIFY_CLIENT_ID'; // You need to replace this with your Spotify API client ID
         const redirectUri = window.location.origin + window.location.pathname;
         
         // Function to get URL parameters
@@ -142,13 +142,53 @@
                     document.getElementById('status').textContent = `Loaded ${artists.length} artists...`;
                 }
                 
-                return artists;
+                // Now fetch detailed info for each artist to get Instagram links
+                document.getElementById('status').textContent = 'Finding Instagram accounts...';
+                const artistsWithDetails = await fetchArtistsDetails(artists, accessToken);
+                
+                return artistsWithDetails;
                 
             } catch (error) {
                 console.error('Error fetching followed artists:', error);
                 document.getElementById('status').textContent = 'Error: ' + error.message;
                 return [];
             }
+        }
+        
+        // Function to fetch detailed artist info including Instagram links
+        async function fetchArtistsDetails(artists, accessToken) {
+            const detailedArtists = [];
+            const batchSize = 10; // Process in smaller batches to avoid overwhelming the browser
+            
+            for (let i = 0; i < artists.length; i += batchSize) {
+                const batch = artists.slice(i, i + batchSize);
+                const promises = batch.map(artist => {
+                    return fetch(`https://api.spotify.com/v1/artists/${artist.id}`, {
+                        headers: {
+                            'Authorization': 'Bearer ' + accessToken
+                        }
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            console.warn(`Failed to fetch details for ${artist.name}`);
+                            return artist; // Return original artist if detail fetch fails
+                        }
+                        return response.json();
+                    })
+                    .catch(error => {
+                        console.warn(`Error fetching details for ${artist.name}:`, error);
+                        return artist; // Return original artist on error
+                    });
+                });
+                
+                const batchResults = await Promise.all(promises);
+                detailedArtists.push(...batchResults);
+                
+                // Update status
+                document.getElementById('status').textContent = `Processing artists... ${Math.min(i + batchSize, artists.length)} of ${artists.length}`;
+            }
+            
+            return detailedArtists;
         }
         
         // Function to display artists with Instagram links
