@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Spotify to Instagram Artist Finder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1DB954; /* Spotify green */
+            text-align: center;
+        }
+        .container {
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .btn {
+            background-color: #1DB954;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            display: block;
+            margin: 20px auto;
+        }
+        .btn:hover {
+            background-color: #1ed760;
+        }
+        .btn-insta {
+            background: linear-gradient(45deg, #405DE6, #5851DB, #833AB4, #C13584, #E1306C, #FD1D1D);
+        }
+        .artist-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .artist-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .artist-img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin: 0 auto 10px;
+            display: block;
+        }
+        #status {
+            text-align: center;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Spotify to Instagram Artist Finder</h1>
+    
+    <div class="container">
+        <p>This tool helps you find Instagram accounts for artists you follow on Spotify. Simply authorize with your Spotify account to get started.</p>
+        <p><strong>Note:</strong> Due to Instagram API limitations, this tool will find artists who have linked their Instagram accounts in their Spotify profiles.</p>
+        
+        <button id="login-button" class="btn">Connect Spotify Account</button>
+    </div>
+    
+    <div id="status"></div>
+    
+    <div id="artists-container" class="hidden container">
+        <h2>Your Followed Artists</h2>
+        <p id="artist-count"></p>
+        <div id="artist-list" class="artist-list"></div>
+    </div>
+
+    <script>
+        // Spotify API credentials
+        const clientId = 'YOUR_SPOTIFY_CLIENT_ID'; // You need to replace this with your Spotify API client ID
+        const redirectUri = window.location.origin + window.location.pathname;
+        
+        // Function to get URL parameters
+        function getHashParams() {
+            let hashParams = {};
+            let e, r = /([^&;=]+)=?([^&;]*)/g,
+                q = window.location.hash.substring(1);
+            while (e = r.exec(q)) {
+                hashParams[e[1]] = decodeURIComponent(e[2]);
+            }
+            return hashParams;
+        }
+        
+        // Function to login to Spotify
+        function loginToSpotify() {
+            const scopes = 'user-follow-read';
+            let url = 'https://accounts.spotify.com/authorize';
+            url += '?response_type=token';
+            url += '&client_id=' + encodeURIComponent(clientId);
+            url += '&scope=' + encodeURIComponent(scopes);
+            url += '&redirect_uri=' + encodeURIComponent(redirectUri);
+            
+            window.location = url;
+        }
+        
+        // Function to fetch followed artists
+        async function getFollowedArtists(accessToken) {
+            const limit = 50; // Spotify API limit
+            let artists = [];
+            let url = 'https://api.spotify.com/v1/me/following?type=artist&limit=' + limit;
+            
+            try {
+                while (url) {
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': 'Bearer ' + accessToken
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to fetch artists');
+                    }
+                    
+                    const data = await response.json();
+                    artists = artists.concat(data.artists.items);
+                    
+                    // Check if there are more artists to fetch
+                    url = data.artists.next;
+                    
+                    // Update status
+                    document.getElementById('status').textContent = `Loaded ${artists.length} artists...`;
+                }
+                
+                return artists;
+                
+            } catch (error) {
+                console.error('Error fetching followed artists:', error);
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                return [];
+            }
+        }
+        
+        // Function to display artists with Instagram links
+        function displayArtists(artists) {
+            const artistsContainer = document.getElementById('artists-container');
+            const artistList = document.getElementById('artist-list');
+            const artistCount = document.getElementById('artist-count');
+            
+            // Clear previous content
+            artistList.innerHTML = '';
+            
+            // Filter artists with Instagram links
+            const artistsWithInsta = artists.filter(artist => 
+                artist.external_urls && artist.external_urls.instagram);
+            
+            if (artistsWithInsta.length === 0) {
+                artistCount.textContent = 'No artists with linked Instagram accounts found.';
+                return;
+            }
+            
+            artistCount.textContent = `Found ${artistsWithInsta.length} out of ${artists.length} artists with Instagram links.`;
+            
+            // Display each artist
+            artistsWithInsta.forEach(artist => {
+                const card = document.createElement('div');
+                card.className = 'artist-card';
+                
+                // Artist image
+                let imgUrl = 'https://via.placeholder.com/100';
+                if (artist.images && artist.images.length > 0) {
+                    imgUrl = artist.images[0].url;
+                }
+                
+                const instagramUrl = `https://instagram.com/${artist.external_urls.instagram}`;
+                
+                card.innerHTML = `
+                    <img src="${imgUrl}" alt="${artist.name}" class="artist-img">
+                    <h3>${artist.name}</h3>
+                    <a href="${instagramUrl}" target="_blank" class="btn btn-insta">Follow on Instagram</a>
+                `;
+                
+                artistList.appendChild(card);
+            });
+            
+            // Show the container
+            artistsContainer.classList.remove('hidden');
+        }
+        
+        // Main function
+        async function init() {
+            const params = getHashParams();
+            const accessToken = params.access_token;
+            
+            if (accessToken) {
+                document.getElementById('login-button').style.display = 'none';
+                document.getElementById('status').textContent = 'Loading your artists...';
+                
+                const artists = await getFollowedArtists(accessToken);
+                document.getElementById('status').textContent = '';
+                displayArtists(artists);
+            } else {
+                document.getElementById('login-button').addEventListener('click', loginToSpotify);
+            }
+        }
+        
+        // Initialize when page loads
+        window.onload = init;
+    </script>
+</body>
+</html>
